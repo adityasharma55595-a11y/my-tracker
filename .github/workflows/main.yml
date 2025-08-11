@@ -1,23 +1,24 @@
-name: Run DTDC Tracking Every Hour
+name: Run DTDC to BIK Tracking
 
 on:
   schedule:
-    - cron: "0 * * * *"  # every hour
-  workflow_dispatch:
+    - cron: "0 * * * *" # Runs every hour at 00 minutes
+  workflow_dispatch: # Allow manual run from GitHub UI
 
 jobs:
-  run-script:
+  run-tracking:
     runs-on: windows-latest
+    env:
+      SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+      SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      DTDC_TOKEN: ${{ secrets.DTDC_TOKEN }}
+      DTDC_URL: ${{ secrets.DTDC_URL }}
+      BIK_WEBHOOK_URL: ${{ secrets.BIK_WEBHOOK_URL }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Run PowerShell script
+      - name: Run PowerShell Script
         shell: pwsh
         run: |
-          $env:SHOPIFY_DOMAIN = "${{ secrets.SHOPIFY_DOMAIN }}"
-          $env:SHOPIFY_TOKEN  = "${{ secrets.SHOPIFY_TOKEN }}"
-          $env:DTDC_TOKEN     = "${{ secrets.DTDC_TOKEN }}"
-          $env:BIK_WEBHOOK    = "${{ secrets.BIK_WEBHOOK }}"
-          $env:LOG_FILE       = "${{ secrets.LOG_FILE }}"
-          pwsh -File ./dtdc_to_bik.ps1
+          ./tracking.ps1
