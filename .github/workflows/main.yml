@@ -1,24 +1,16 @@
 name: Run DTDC to BIK Tracking
 
 on:
+  workflow_dispatch: # manual trigger
   schedule:
-    - cron: "0 * * * *" # Runs every hour at 00 minutes
-  workflow_dispatch: # Allow manual run from GitHub UI
+    - cron: '0 * * * *'    # every hour, 24/7
 
 jobs:
   run-tracking:
-    runs-on: windows-latest
-    env:
-      SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
-      SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-      DTDC_TOKEN: ${{ secrets.DTDC_TOKEN }}
-      DTDC_URL: ${{ secrets.DTDC_URL }}
-      BIK_WEBHOOK_URL: ${{ secrets.BIK_WEBHOOK_URL }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Run PowerShell Script
-        shell: pwsh
-        run: |
-          ./my-tracker.ps1
+      - name: Run PowerShell script
+        run: pwsh ./my-tracker.ps1
