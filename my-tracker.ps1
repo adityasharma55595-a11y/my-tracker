@@ -4,7 +4,7 @@ $accessToken   = $env:SHOPIFY_ACCESS_TOKEN
 $dtdcToken     = $env:DTDC_TOKEN
 $dtdcUrl       = $env:DTDC_URL
 $bikWebhookUrl = $env:BIK_WEBHOOK_URL
-$logFile       = "C:\Scripts\dtdc_to_bik_log.txt"
+$logFile       = "$PSScriptRoot\dtdc_to_bik_log.txt"
 
 # === Start Logging ===
 $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
