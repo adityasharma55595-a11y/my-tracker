@@ -21,4 +21,4 @@ jobs:
       - name: Run PowerShell Script
         shell: pwsh
         run: |
-          ./tracking.ps1
+          ./my-tracker.ps1
