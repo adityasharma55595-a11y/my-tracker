@@ -12,6 +12,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Run PowerShell script
-        run: pwsh ./my-tracker.ps1
+     - name: Run PowerShell script
+       shell: pwsh
+       run: ./my-tracker.ps1
+
 
