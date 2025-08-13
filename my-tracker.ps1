@@ -4,7 +4,30 @@ $accessToken   = $env:SHOPIFY_ACCESS_TOKEN
 $dtdcToken     = $env:DTDC_TOKEN
 $dtdcUrl       = $env:DTDC_URL
 $bikWebhookUrl = $env:BIK_WEBHOOK_URL
+
+# === File Paths ===
 $logFile       = "$PSScriptRoot\dtdc_to_bik_log.txt"
+$statusFile    = "$PSScriptRoot\awb_status.json"
+
+# === Allowed statuses ===
+$allowedStatuses = @(
+    "DELIVERED",
+    "DISPATCHED",
+    "OUT FOR DELIVERY",
+    "IN TRANSIT",
+    "RECEIVED AT DESTINATION",
+    "RECEIVED",
+    "NOT DELIVERED",
+    "ATTEMPTED",
+    "RTO"
+)
+
+# === Load last statuses if exists ===
+if (Test-Path $statusFile) {
+    $lastStatuses = Get-Content $statusFile | ConvertFrom-Json
+} else {
+    $lastStatuses = @{}
+}
 
 # === Start Logging ===
 $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -70,23 +93,37 @@ try {
 
                     if ($trackDetails -and $trackDetails.Count -gt 0) {
                         $latestEvent = $trackDetails[-1]
-                        $status = $latestEvent.strAction
-                        $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
+                        $status = $latestEvent.strAction.Trim().ToUpper()
 
-                        # === Build Payload in Exact Order ===
-                        $payload = [ordered]@{
-                            customer_name = $customerName
-                            awb           = $awb
-                            phone         = $phone
-                            product_title = $productTitleString
-                            email         = $email
-                            status        = $status
-                            tracking_url  = $trackingUrl
-                        } | ConvertTo-Json -Compress
+                        # Only proceed if status is in allowed list
+                        if ($allowedStatuses -contains $status) {
+                            # Check if status changed from last saved
+                            if (-not $lastStatuses.ContainsKey($awb) -or $lastStatuses[$awb] -ne $status) {
+                                $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
 
-                        Add-Content -Path $logFile -Value "Sending to BIK: $payload"
-                        Invoke-RestMethod -Uri $bikWebhookUrl -Method Post -Body $payload -ContentType "application/json"
-                        Add-Content -Path $logFile -Value "Status sent to BIK: $awb"
+                                # === Build Payload ===
+                                $payload = [ordered]@{
+                                    customer_name = $customerName
+                                    awb           = $awb
+                                    phone         = $phone
+                                    product_title = $productTitleString
+                                    email         = $email
+                                    status        = $status
+                                    tracking_url  = $trackingUrl
+                                } | ConvertTo-Json -Compress
+
+                                Add-Content -Path $logFile -Value "Sending to BIK: $payload"
+                                Invoke-RestMethod -Uri $bikWebhookUrl -Method Post -Body $payload -ContentType "application/json"
+                                Add-Content -Path $logFile -Value "Status sent to BIK: $awb"
+
+                                # Save new status
+                                $lastStatuses[$awb] = $status
+                            } else {
+                                Add-Content -Path $logFile -Value "No change for $awb, skipping send."
+                            }
+                        } else {
+                            Add-Content -Path $logFile -Value "Status '$status' for $awb not in allowed list, skipping."
+                        }
                     }
                 } catch {
                     Add-Content -Path $logFile -Value ("DTDC API error for AWB ${awb}: $($_.Exception.Message)")
@@ -97,6 +134,9 @@ try {
 } catch {
     Add-Content -Path $logFile -Value "Shopify fetch error: $($_.Exception.Message)"
 }
+
+# Save updated statuses to JSON
+$lastStatuses | ConvertTo-Json | Set-Content $statusFile
 
 Add-Content -Path $logFile -Value "Script ended at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Add-Content -Path $logFile -Value "============================="
