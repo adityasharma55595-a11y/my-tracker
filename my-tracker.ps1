@@ -9,7 +9,7 @@ $bikWebhookUrl = $env:BIK_WEBHOOK_URL
 $logFile       = "$PSScriptRoot\dtdc_to_bik_log.txt"
 $statusFile    = "$PSScriptRoot\awb_status.json"
 
-# === Allowed statuses ===
+# === Allowed statuses (force uppercase for comparison) ===
 $allowedStatuses = @(
     "DELIVERED",
     "DISPATCHED",
@@ -20,7 +20,7 @@ $allowedStatuses = @(
     "NOT DELIVERED",
     "ATTEMPTED",
     "RTO"
-)
+) | ForEach-Object { $_.ToUpper() }
 
 # === Load last statuses if exists ===
 if (Test-Path $statusFile) {
@@ -92,8 +92,22 @@ try {
                     $trackDetails = $dtdcResponse.trackDetails
 
                     if ($trackDetails -and $trackDetails.Count -gt 0) {
-                        $latestEvent = $trackDetails[-1]
+                        # Sort events by date to ensure latest
+                        $latestEvent = $trackDetails | Sort-Object {
+                            try {
+                                [datetime]::ParseExact($_.strActionDate, "dd/MM/yyyy HH:mm", $null)
+                            } catch {
+                                Get-Date 0
+                            }
+                        } -Descending | Select-Object -First 1
+
                         $status = $latestEvent.strAction.Trim().ToUpper()
+
+                        # Skip if not in allowed statuses
+                        if ($allowedStatuses -notcontains $status) {
+                            Add-Content -Path $logFile -Value "Status '$status' for $awb not in allowed list, skipping."
+                            continue
+                        }
 
                         # Ensure AWB entry exists
                         if (-not $lastStatuses.ContainsKey($awb)) {
@@ -106,36 +120,25 @@ try {
                             continue
                         }
 
-                        # Skip if already sent DELIVERED before
-                        if ($status -eq "DELIVERED" -and $lastStatuses[$awb] -eq "DELIVERED") {
-                            Add-Content -Path $logFile -Value "AWB $awb already sent DELIVERED before, skipping."
-                            continue
-                        }
+                        # Send to BIK
+                        $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
 
-                        # Proceed only if status is allowed
-                        if ($allowedStatuses -contains $status) {
-                            $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
+                        $payload = [ordered]@{
+                            customer_name = $customerName
+                            awb           = $awb
+                            phone         = $phone
+                            product_title = $productTitleString
+                            email         = $email
+                            status        = $status
+                            tracking_url  = $trackingUrl
+                        } | ConvertTo-Json -Compress
 
-                            # === Build Payload ===
-                            $payload = [ordered]@{
-                                customer_name = $customerName
-                                awb           = $awb
-                                phone         = $phone
-                                product_title = $productTitleString
-                                email         = $email
-                                status        = $status
-                                tracking_url  = $trackingUrl
-                            } | ConvertTo-Json -Compress
+                        Add-Content -Path $logFile -Value "Sending to BIK: $payload"
+                        Invoke-RestMethod -Uri $bikWebhookUrl -Method Post -Body $payload -ContentType "application/json"
+                        Add-Content -Path $logFile -Value "Status sent to BIK: $awb"
 
-                            Add-Content -Path $logFile -Value "Sending to BIK: $payload"
-                            Invoke-RestMethod -Uri $bikWebhookUrl -Method Post -Body $payload -ContentType "application/json"
-                            Add-Content -Path $logFile -Value "Status sent to BIK: $awb"
-
-                            # Save new status
-                            $lastStatuses[$awb] = $status
-                        } else {
-                            Add-Content -Path $logFile -Value "Status '$status' for $awb not in allowed list, skipping."
-                        }
+                        # Save new status
+                        $lastStatuses[$awb] = $status
                     }
                 } catch {
                     Add-Content -Path $logFile -Value ("DTDC API error for AWB ${awb}: $($_.Exception.Message)")
