@@ -95,32 +95,44 @@ try {
                         $latestEvent = $trackDetails[-1]
                         $status = $latestEvent.strAction.Trim().ToUpper()
 
-                        # Only proceed if status is in allowed list
+                        # Ensure AWB entry exists
+                        if (-not $lastStatuses.ContainsKey($awb)) {
+                            $lastStatuses[$awb] = ""
+                        }
+
+                        # Skip if same as last status
+                        if ($lastStatuses[$awb] -eq $status) {
+                            Add-Content -Path $logFile -Value "No change for $awb (still $status), skipping send."
+                            continue
+                        }
+
+                        # Skip if already sent DELIVERED before
+                        if ($status -eq "DELIVERED" -and $lastStatuses[$awb] -eq "DELIVERED") {
+                            Add-Content -Path $logFile -Value "AWB $awb already sent DELIVERED before, skipping."
+                            continue
+                        }
+
+                        # Proceed only if status is allowed
                         if ($allowedStatuses -contains $status) {
-                            # Check if status changed from last saved
-                            if (-not $lastStatuses.ContainsKey($awb) -or $lastStatuses[$awb] -ne $status) {
-                                $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
+                            $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
 
-                                # === Build Payload ===
-                                $payload = [ordered]@{
-                                    customer_name = $customerName
-                                    awb           = $awb
-                                    phone         = $phone
-                                    product_title = $productTitleString
-                                    email         = $email
-                                    status        = $status
-                                    tracking_url  = $trackingUrl
-                                } | ConvertTo-Json -Compress
+                            # === Build Payload ===
+                            $payload = [ordered]@{
+                                customer_name = $customerName
+                                awb           = $awb
+                                phone         = $phone
+                                product_title = $productTitleString
+                                email         = $email
+                                status        = $status
+                                tracking_url  = $trackingUrl
+                            } | ConvertTo-Json -Compress
 
-                                Add-Content -Path $logFile -Value "Sending to BIK: $payload"
-                                Invoke-RestMethod -Uri $bikWebhookUrl -Method Post -Body $payload -ContentType "application/json"
-                                Add-Content -Path $logFile -Value "Status sent to BIK: $awb"
+                            Add-Content -Path $logFile -Value "Sending to BIK: $payload"
+                            Invoke-RestMethod -Uri $bikWebhookUrl -Method Post -Body $payload -ContentType "application/json"
+                            Add-Content -Path $logFile -Value "Status sent to BIK: $awb"
 
-                                # Save new status
-                                $lastStatuses[$awb] = $status
-                            } else {
-                                Add-Content -Path $logFile -Value "No change for $awb, skipping send."
-                            }
+                            # Save new status
+                            $lastStatuses[$awb] = $status
                         } else {
                             Add-Content -Path $logFile -Value "Status '$status' for $awb not in allowed list, skipping."
                         }
