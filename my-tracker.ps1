@@ -92,14 +92,21 @@ try {
                     $trackDetails = $dtdcResponse.trackDetails
 
                     if ($trackDetails -and $trackDetails.Count -gt 0) {
-                        # Sort events by date to ensure latest
-                        $latestEvent = $trackDetails | Sort-Object {
-                            try {
-                                [datetime]::ParseExact($_.strActionDate, "dd/MM/yyyy HH:mm", $null)
-                            } catch {
-                                Get-Date 0
-                            }
-                        } -Descending | Select-Object -First 1
+                        # Sort events by parsed datetime
+                        $latestEvent = $trackDetails |
+                            Sort-Object {
+                                try {
+                                    if ($_.strActionDateTime) {
+                                        [datetime]::ParseExact($_.strActionDateTime, "dd-MM-yyyy HH:mm", $null)
+                                    } elseif ($_.strActionDate) {
+                                        [datetime]::ParseExact($_.strActionDate, "dd/MM/yyyy HH:mm", $null)
+                                    } else {
+                                        Get-Date 0
+                                    }
+                                } catch {
+                                    Get-Date 0
+                                }
+                            } -Descending | Select-Object -First 1
 
                         $status = $latestEvent.strAction.Trim().ToUpper()
 
