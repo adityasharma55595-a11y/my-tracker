@@ -92,7 +92,7 @@ try {
                             # === Prevent duplicates ===
                             if (-not $lastStatuses.ContainsKey($awb) -or $lastStatuses[$awb] -ne $status) {
 
-                                $trackingUrl = "https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=$awb"
+                                $trackingUrl = "https://babyjalebi.com/pages/track-your-order-1?awb=$awb"
 
                                 # === Build Payload ===
                                 $payload = [ordered]@{
